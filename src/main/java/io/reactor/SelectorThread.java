@@ -5,21 +5,29 @@ import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.util.Iterator;
 import java.util.Set;
-import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * eventLoop的同比
  */
-public class SelectorThread extends Thread {
+public class SelectorThread implements Runnable {
     //一个线程对应一个selector
     //每个客户端只会绑定到其中一个selector
     Selector selector = null;
 
+    //
 
-    LinkedBlockingDeque<Channel> blockingDeque = new LinkedBlockingDeque<>();
+    ThreadLocal<LinkedBlockingQueue<Channel>> threadLocal = ThreadLocal.withInitial(LinkedBlockingQueue::new);
 
-    public SelectorThread() {
+    LinkedBlockingQueue<Channel> blockingDeque = threadLocal.get();
+
+    SelectorThreadGroup threadGroup;
+
+    public SelectorThread(SelectorThreadGroup threadGroup) {
+
+        this.threadGroup = threadGroup;
         try {
+
             this.selector = Selector.open();
         } catch (IOException e) {
             e.printStackTrace();
@@ -80,7 +88,7 @@ public class SelectorThread extends Thread {
             try {
                 int nums = channel.read(byteBuffer);
                 if (nums > 0) {
-                    //将督导的内容反转，直接写出
+                    //将读到的内容反转，直接写出
                     byteBuffer.flip();
                     while (byteBuffer.hasRemaining()) {
                         channel.write(byteBuffer);
@@ -109,9 +117,17 @@ public class SelectorThread extends Thread {
         ServerSocketChannel serverSocketChannel = (ServerSocketChannel) key.channel();
         try {
             SocketChannel client = serverSocketChannel.accept();
+            client.configureBlocking(false);
+            threadGroup.nextSelector3(client);
+
             //选择一个selector去注册
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+
+    public void setWorker(SelectorThreadGroup stgWorker) {
+        this.threadGroup =  stgWorker;
     }
 }
